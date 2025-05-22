@@ -318,6 +318,8 @@ pub fn schema(conn: &mut PgConnection, site: &Site) -> Result<(InputSchema, bool
 }
 
 pub struct ManifestInfo {
+    pub description: Option<String>,
+    pub repository: Option<String>,
     pub spec_version: String,
     pub instrument: bool,
 }
@@ -325,8 +327,18 @@ pub struct ManifestInfo {
 impl ManifestInfo {
     pub fn load(conn: &mut PgConnection, site: &Site) -> Result<ManifestInfo, StoreError> {
         use subgraph_manifest as sm;
-        let (spec_version, features): (String, Vec<String>) = sm::table
-            .select((sm::spec_version, sm::features))
+        let (description, repository, spec_version, features): (
+            Option<String>,
+            Option<String>,
+            String,
+            Vec<String>,
+        ) = sm::table
+            .select((
+                sm::description,
+                sm::repository,
+                sm::spec_version,
+                sm::features,
+            ))
             .filter(sm::id.eq(site.id))
             .first(conn)?;
 
@@ -336,6 +348,8 @@ impl ManifestInfo {
         let instrument = features.iter().any(|s| s == "instrument");
 
         Ok(ManifestInfo {
+            description,
+            repository,
             spec_version,
             instrument,
         })
