@@ -8,6 +8,7 @@ use bytes::BytesMut;
 use futures03::stream::BoxStream;
 use futures03::StreamExt;
 use futures03::TryStreamExt;
+use slog::warn;
 use slog::Logger;
 
 use crate::ipfs::ContentPath;
@@ -74,12 +75,16 @@ pub trait IpfsClient: Send + Sync + 'static {
 
                 move || {
                     let path = path.clone();
+                    let path2 = path.clone();
                     let client = self.clone();
 
                     async move {
+                        let logger = client.logger().clone();
                         client
                             .call(IpfsRequest::Cat(path))
-                            .await?
+                            .await.inspect_err(|e| {
+                                warn!(logger, "Failed to cat IPFS content"; "path" => path2.to_string(), "error" => e.to_string());
+                            })?
                             .bytes(Some(max_size))
                             .await
                     }
