@@ -1008,7 +1008,11 @@ impl Queue {
     /// to fill up before writing them to maximize the chances that we build
     /// a 'full' write batch, i.e., one that is either big enough or old
     /// enough
-    async fn push_write(&self, batch: Batch) -> Result<(), StoreError> {
+    async fn push_write(
+        &self,
+        batch: Batch,
+        stopwatch: &StopwatchMetrics,
+    ) -> Result<(), StoreError> {
         let batch = if ENV_VARS.store.write_batch_size == 0
             || ENV_VARS.store.write_batch_duration.is_zero()
             || !self.batch_writes()
@@ -1049,6 +1053,8 @@ impl Queue {
                             match existing.try_write() {
                                 Ok(mut existing) => {
                                     if existing.weight() < ENV_VARS.store.write_batch_size {
+                                        let _section =
+                                            stopwatch.start_section("transact_block:append_batch");
                                         let res = existing.append(batch).map(|()| None);
                                         if existing.weight() >= ENV_VARS.store.write_batch_size {
                                             self.batch_ready_notify.notify_one();
@@ -1369,7 +1375,7 @@ impl Writer {
             Writer::Sync(store) => store.transact_block_operations(&batch, stopwatch),
             Writer::Async { queue, .. } => {
                 self.check_queue_running()?;
-                queue.push_write(batch).await
+                queue.push_write(batch, stopwatch).await
             }
         }
     }
@@ -1698,16 +1704,19 @@ impl WritableStoreTrait for WritableStore {
             }
         }
 
-        let batch = Batch::new(
-            block_ptr_to.clone(),
-            block_time,
-            firehose_cursor.clone(),
-            mods,
-            data_sources,
-            deterministic_errors,
-            processed_data_sources,
-            is_non_fatal_errors_active,
-        )?;
+        let batch = {
+            let _section = stopwatch.start_section("transact_block:batch_new");
+            Batch::new(
+                block_ptr_to.clone(),
+                block_time,
+                firehose_cursor.clone(),
+                mods,
+                data_sources,
+                deterministic_errors,
+                processed_data_sources,
+                is_non_fatal_errors_active,
+            )?
+        };
         self.writer.write(batch, stopwatch).await?;
 
         *self.block_ptr.lock().unwrap() = Some(block_ptr_to);
