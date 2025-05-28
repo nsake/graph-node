@@ -444,6 +444,12 @@ impl RowGroup {
     /// Append `row` to `self.rows` by combining it with a previously
     /// existing row, if that is possible
     fn append_row(&mut self, row: EntityModification) -> Result<(), StoreError> {
+        lazy_static::lazy_static! {
+            static ref CHECK_LAST_MOD_CONSISTENCY: bool = {
+                std::env::var("GRAPH_CHECK_LAST_MOD_CONSISTENCY").ok().is_some()
+            };
+        };
+
         if self.immutable {
             match row {
                 EntityModification::Insert { .. } => {
@@ -471,7 +477,7 @@ impl RowGroup {
                 ));
             }
 
-            if row.id() != prev_row.id() {
+            if *CHECK_LAST_MOD_CONSISTENCY && row.id() != prev_row.id() {
                 return Err(internal_error!(
                     "last_mod map is corrupted: got id {} looking up id {}",
                     prev_row.id(),
@@ -776,7 +782,11 @@ impl Batch {
         Ok(batch)
     }
 
-    fn append_inner(&mut self, mut batch: Batch) -> Result<(), StoreError> {
+    fn append_inner(
+        &mut self,
+        mut batch: Batch,
+        stopwatch: &StopwatchMetrics,
+    ) -> Result<(), StoreError> {
         if batch.block_ptr.number <= self.block_ptr.number {
             return Err(internal_error!("Batches must go forward. Can't append a batch with block pointer {} to one with block pointer {}", batch.block_ptr, self.block_ptr));
         }
@@ -784,7 +794,10 @@ impl Batch {
         self.block_ptr = batch.block_ptr;
         self.block_times.append(&mut batch.block_times);
         self.firehose_cursor = batch.firehose_cursor;
-        self.mods.append(batch.mods)?;
+        {
+            stopwatch.start_section("transact_block:append_batch:append_mods");
+            self.mods.append(batch.mods)?;
+        }
         self.data_sources.append(batch.data_sources);
         self.deterministic_errors
             .append(&mut batch.deterministic_errors);
@@ -800,7 +813,7 @@ impl Batch {
     /// healthy by setting `self.error` to `Some(_)` and must not be written
     /// as it will be in an indeterminate state.
     pub fn append(&mut self, batch: Batch, stopwatch: &StopwatchMetrics) -> Result<(), StoreError> {
-        let res = self.append_inner(batch);
+        let res = self.append_inner(batch, stopwatch);
         if let Err(e) = &res {
             self.error = Some(e.clone());
         }
