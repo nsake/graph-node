@@ -13,6 +13,7 @@ use crate::{
     derive::CacheWeight,
     env::ENV_VARS,
     internal_error,
+    prelude::StopwatchMetrics,
     util::cache_weight::CacheWeight,
 };
 
@@ -798,12 +799,15 @@ impl Batch {
     /// When this method returns an `Err`, the batch is marked as not
     /// healthy by setting `self.error` to `Some(_)` and must not be written
     /// as it will be in an indeterminate state.
-    pub fn append(&mut self, batch: Batch) -> Result<(), StoreError> {
+    pub fn append(&mut self, batch: Batch, stopwatch: &StopwatchMetrics) -> Result<(), StoreError> {
         let res = self.append_inner(batch);
         if let Err(e) = &res {
             self.error = Some(e.clone());
         }
-        self.weigh();
+        {
+            stopwatch.start_section("transact_block:append_batch:weigh");
+            self.weigh();
+        }
         res
     }
 
