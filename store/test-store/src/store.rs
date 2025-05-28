@@ -356,12 +356,6 @@ pub async fn transact_entities_and_dynamic_data_sources(
         Arc::new(manifest_idx_and_name),
     ))?;
 
-    let mut entity_cache = EntityCache::new(Arc::new(store.clone()));
-    entity_cache.append(ops);
-    let mods = entity_cache
-        .as_modifications(block_ptr_to.number)
-        .expect("failed to convert to modifications")
-        .modifications;
     let metrics_registry = Arc::new(MetricsRegistry::mock());
     let stopwatch_metrics = StopwatchMetrics::new(
         Logger::root(slog::Discard, o!()),
@@ -370,6 +364,13 @@ pub async fn transact_entities_and_dynamic_data_sources(
         metrics_registry.clone(),
         store.shard().to_string(),
     );
+
+    let mut entity_cache = EntityCache::new(Arc::new(store.clone()));
+    entity_cache.append(ops);
+    let mods = entity_cache
+        .as_modifications(block_ptr_to.number, &stopwatch_metrics)
+        .expect("failed to convert to modifications")
+        .modifications;
     let block_time = BlockTime::for_test(&block_ptr_to);
     store
         .transact_block_operations(

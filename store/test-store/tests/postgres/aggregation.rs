@@ -87,12 +87,6 @@ pub async fn insert(
         })
         .collect();
 
-    let mut entity_cache = EntityCache::new(Arc::new(store.clone()));
-    entity_cache.append(ops);
-    let mods = entity_cache
-        .as_modifications(block_ptr_to.number)
-        .expect("failed to convert to modifications")
-        .modifications;
     let metrics_registry = METRICS_REGISTRY.clone();
     let stopwatch_metrics = StopwatchMetrics::new(
         LOGGER.clone(),
@@ -101,6 +95,13 @@ pub async fn insert(
         metrics_registry.clone(),
         store.shard().to_string(),
     );
+
+    let mut entity_cache = EntityCache::new(Arc::new(store.clone()));
+    entity_cache.append(ops);
+    let mods = entity_cache
+        .as_modifications(block_ptr_to.number, &stopwatch_metrics)
+        .expect("failed to convert to modifications")
+        .modifications;
     store
         .transact_block_operations(
             block_ptr_to,

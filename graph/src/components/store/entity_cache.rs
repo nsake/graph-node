@@ -8,7 +8,7 @@ use crate::cheap_clone::CheapClone;
 use crate::components::store::write::EntityModification;
 use crate::components::store::{self as s, Entity, EntityOperation};
 use crate::data::store::{EntityValidationError, Id, IdType, IntoEntityIterator};
-use crate::prelude::{CacheWeight, ENV_VARS};
+use crate::prelude::{CacheWeight, StopwatchMetrics, ENV_VARS};
 use crate::schema::{EntityKey, InputSchema};
 use crate::util::intern::Error as InternError;
 use crate::util::lfu_cache::{EvictStats, LfuCache};
@@ -474,6 +474,7 @@ impl EntityCache {
     pub fn as_modifications(
         mut self,
         block: BlockNumber,
+        metrics: &StopwatchMetrics,
     ) -> Result<ModificationsAndCache, StoreError> {
         assert!(!self.in_handler);
 
@@ -493,10 +494,13 @@ impl EntityCache {
         // violation in the database, ensuring correctness
         let missing = missing.filter(|key| !key.entity_type.is_immutable());
 
-        for (entity_key, entity) in self.store.get_many(missing.cloned().collect())? {
-            self.current.insert(entity_key, Some(Arc::new(entity)));
-        }
+        {
+            let _section = metrics.start_section("as_modifications:get_many");
 
+            for (entity_key, entity) in self.store.get_many(missing.cloned().collect())? {
+                self.current.insert(entity_key, Some(Arc::new(entity)));
+            }
+        }
         let mut mods = Vec::new();
         for (key, update) in self.updates {
             use EntityModification::*;

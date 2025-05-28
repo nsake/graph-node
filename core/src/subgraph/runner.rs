@@ -426,7 +426,9 @@ where
             modifications: mut mods,
             entity_lfu_cache: cache,
             evict_stats,
-        } = entity_cache.as_modifications(block_ptr.number).classify()?;
+        } = entity_cache
+            .as_modifications(block_ptr.number, &self.metrics.host.stopwatch)
+            .classify()?;
         section.end();
 
         log_evict_stats(&self.logger, &evict_stats);
@@ -1286,7 +1288,7 @@ where
             mods.extend(
                 block_state
                     .entity_cache
-                    .as_modifications(block.number())?
+                    .as_modifications(block.number(), &self.metrics.host.stopwatch)?
                     .modifications,
             );
             processed_data_sources.extend(block_state.processed_data_sources);

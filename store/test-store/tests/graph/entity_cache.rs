@@ -186,11 +186,24 @@ fn sort_by_entity_key(mut mods: Vec<EntityModification>) -> Vec<EntityModificati
     mods
 }
 
+fn stopwatch_metrics() -> StopwatchMetrics {
+    let hash = DeploymentHash::new("test_deployment_id").unwrap();
+    let metrics_registry: Arc<MetricsRegistry> = Arc::new(MetricsRegistry::mock());
+    StopwatchMetrics::new(
+        LOGGER.clone(),
+        hash,
+        "test",
+        metrics_registry.clone(),
+        "test_shard".to_string(),
+    )
+}
+
 #[tokio::test]
 async fn empty_cache_modifications() {
     let store = Arc::new(MockStore::new(BTreeMap::new()));
     let cache = EntityCache::new(store);
-    let result = cache.as_modifications(0);
+    let stopwatch = stopwatch_metrics();
+    let result = cache.as_modifications(0, &stopwatch);
     assert_eq!(result.unwrap().modifications, vec![]);
 }
 
@@ -218,7 +231,8 @@ fn insert_modifications() {
     mogwai_data.set_vid(100).unwrap();
     sigurros_data.set_vid(101).unwrap();
 
-    let result = cache.as_modifications(0);
+    let stopwatch = stopwatch_metrics();
+    let result = cache.as_modifications(0, &stopwatch);
     assert_eq!(
         sort_by_entity_key(result.unwrap().modifications),
         sort_by_entity_key(vec![
@@ -267,7 +281,8 @@ fn overwrite_modifications() {
     mogwai_data.set_vid(100).unwrap();
     sigurros_data.set_vid(101).unwrap();
 
-    let result = cache.as_modifications(0);
+    let stopwatch = stopwatch_metrics();
+    let result = cache.as_modifications(0, &stopwatch);
     assert_eq!(
         sort_by_entity_key(result.unwrap().modifications),
         sort_by_entity_key(vec![
@@ -304,7 +319,8 @@ fn consecutive_modifications() {
 
     // We expect a single overwrite modification for the above that leaves "id"
     // and "name" untouched, sets "founded" and removes the "label" field.
-    let result = cache.as_modifications(0);
+    let stopwatch = stopwatch_metrics();
+    let result = cache.as_modifications(0, &stopwatch);
     assert_eq!(
         sort_by_entity_key(result.unwrap().modifications),
         sort_by_entity_key(vec![EntityModification::overwrite(
@@ -331,7 +347,8 @@ fn check_vid_sequence() {
             .unwrap();
     }
 
-    let result = cache.as_modifications(0);
+    let stopwatch = stopwatch_metrics();
+    let result = cache.as_modifications(0, &stopwatch);
     let mods = result.unwrap().modifications;
     for m in mods {
         match m {

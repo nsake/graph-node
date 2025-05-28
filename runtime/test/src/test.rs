@@ -139,6 +139,18 @@ pub async fn test_module_latest(subgraph_id: &str, wasm_file: &str) -> WasmInsta
         .0
 }
 
+fn stopwatch_metrics() -> StopwatchMetrics {
+    let hash = DeploymentHash::new("test_deployment_id").unwrap();
+    let metrics_registry: Arc<MetricsRegistry> = Arc::new(MetricsRegistry::mock());
+    StopwatchMetrics::new(
+        LOGGER.clone(),
+        hash,
+        "test",
+        metrics_registry.clone(),
+        "test_shard".to_string(),
+    )
+}
+
 pub trait WasmInstanceExt {
     fn invoke_export0_void(&mut self, f: &str) -> Result<(), Error>;
     fn invoke_export1_val_void<V: wasmtime::WasmTy>(&mut self, f: &str, v: V) -> Result<(), Error>;
@@ -534,11 +546,12 @@ async fn run_ipfs_map(
             &mut instance.store.as_context_mut(),
             (value.wasm_ptr(), user_data.wasm_ptr()),
         )?;
+        let stopwatch = stopwatch_metrics();
         let mut mods = instance
             .take_ctx()
             .take_state()
             .entity_cache
-            .as_modifications(0)?
+            .as_modifications(0, &stopwatch)?
             .modifications;
 
         // Bring the modifications into a predictable order (by entity_id)
@@ -1053,7 +1066,8 @@ async fn test_entity_store(api_version: Version) {
         &mut ctx.ctx.state.entity_cache,
         EntityCache::new(Arc::new(writable.clone())),
     );
-    let mut mods = cache.as_modifications(0).unwrap().modifications;
+    let stopwatch = stopwatch_metrics();
+    let mut mods = cache.as_modifications(0, &stopwatch).unwrap().modifications;
     assert_eq!(1, mods.len());
     match mods.pop().unwrap() {
         EntityModification::Overwrite { data, .. } => {
@@ -1069,11 +1083,12 @@ async fn test_entity_store(api_version: Version) {
     let mut fulltext_fields = BTreeMap::new();
     fulltext_fields.insert("name".to_string(), vec!["search".to_string()]);
     fulltext_entities.insert("User".to_string(), fulltext_fields);
+    let stopwatch = stopwatch_metrics();
     let mut mods = instance
         .take_ctx()
         .take_state()
         .entity_cache
-        .as_modifications(0)
+        .as_modifications(0, &stopwatch)
         .unwrap()
         .modifications;
     assert_eq!(1, mods.len());
@@ -1577,7 +1592,11 @@ async fn generate_id() {
         .expect("setting auto works");
 
     let entity_cache = host.ctx.state.entity_cache;
-    let mods = entity_cache.as_modifications(12).unwrap().modifications;
+    let stopwatch = stopwatch_metrics();
+    let mods = entity_cache
+        .as_modifications(12, &stopwatch)
+        .unwrap()
+        .modifications;
     let id_map: HashMap<&str, Id> = HashMap::from_iter(
         vec![
             (
