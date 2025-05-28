@@ -1056,6 +1056,8 @@ impl Queue {
                                         let _section =
                                             stopwatch.start_section("transact_block:append_batch");
                                         let res = existing.append(batch, stopwatch).map(|()| None);
+                                        let _section =
+                                            stopwatch.start_section("transact_block:notify_one");
                                         if existing.weight() >= ENV_VARS.store.write_batch_size {
                                             self.batch_ready_notify.notify_one();
                                         }
