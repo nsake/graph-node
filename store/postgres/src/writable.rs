@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::ops::{Deref, Range};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, RwLock, TryLockError as RwLockError};
+use std::sync::Mutex;
 use std::time::Instant;
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -13,6 +13,7 @@ use graph::data::store::IdList;
 use graph::data::subgraph::schema;
 use graph::data_source::CausalityRegion;
 use graph::internal_error;
+use graph::parking_lot::RwLock;
 use graph::prelude::{
     BlockNumber, CacheWeight, Entity, MetricsRegistry, SubgraphDeploymentEntity,
     SubgraphStore as _, BLOCK_NUMBER_MAX,
@@ -528,7 +529,7 @@ impl BlockTracker {
         // processed.
         let res = queue.find_map(|req| match req.as_ref() {
             Request::Write { batch, .. } => {
-                let batch = batch.read().unwrap();
+                let batch = batch.read();
                 tracker.write(&batch.block_ptr);
                 if batch.first_block <= tracker.revert {
                     let res = f(batch.deref(), tracker.revert);
@@ -567,7 +568,7 @@ impl BlockTracker {
         let accum = queue.fold(init, |accum, req| {
             match req.as_ref() {
                 Request::Write { batch, .. } => {
-                    let batch = batch.read().unwrap();
+                    let batch = batch.read();
                     let mut accum = accum;
                     tracker.write(&batch.block_ptr);
                     if batch.first_block <= tracker.revert {
@@ -622,7 +623,7 @@ impl std::fmt::Debug for Request {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Write { batch, store, .. } => {
-                let batch = batch.read().unwrap();
+                let batch = batch.read();
                 write!(
                     f,
                     "write[{}, {:p}, {} entities]",
@@ -692,7 +693,7 @@ impl Request {
                 processed: _,
             } => {
                 let start = Instant::now();
-                let batch = batch.read().unwrap();
+                let batch = batch.read();
                 if let Some(err) = &batch.error {
                     // This can happen when appending to the batch failed
                     // because of an internal error. Returning an `Err` here
@@ -728,7 +729,7 @@ impl Request {
     fn should_process(&self) -> bool {
         match self {
             Request::Write { queued, batch, .. } => {
-                batch.read().unwrap().weight() >= ENV_VARS.store.write_batch_size
+                batch.read().weight() >= ENV_VARS.store.write_batch_size
                     || queued.elapsed() >= ENV_VARS.store.write_batch_duration
             }
             Request::RevertTo { .. } | Request::Stop => true,
@@ -1050,34 +1051,24 @@ impl Queue {
                             // holds a read lock on the batch for the
                             // duration of the write, and we do not want to
                             // slow down queueing requests unnecessarily
-                            match existing.try_write() {
-                                Ok(mut existing) => {
-                                    if existing.weight() < ENV_VARS.store.write_batch_size {
-                                        let res = {
-                                            let _section = stopwatch
-                                                .start_section("transact_block:append_batch");
-                                            existing.append(batch, stopwatch).map(|()| None)
-                                        };
+                            if let Some(mut existing) = existing.try_write() {
+                                if existing.weight() < ENV_VARS.store.write_batch_size {
+                                    let res = {
                                         let _section =
-                                            stopwatch.start_section("transact_block:notify_one");
-                                        if existing.weight() >= ENV_VARS.store.write_batch_size {
-                                            self.batch_ready_notify.notify_one();
-                                        }
-                                        res
-                                    } else {
-                                        Ok(Some(batch))
+                                            stopwatch.start_section("transact_block:append_batch");
+                                        existing.append(batch, stopwatch).map(|()| None)
+                                    };
+                                    let _section =
+                                        stopwatch.start_section("transact_block:notify_one");
+                                    if existing.weight() >= ENV_VARS.store.write_batch_size {
+                                        self.batch_ready_notify.notify_one();
                                     }
+                                    res
+                                } else {
+                                    Ok(Some(batch))
                                 }
-                                Err(RwLockError::WouldBlock) => {
-                                    // This branch can cause batches that
-                                    // are not 'full' at the head of the
-                                    // queue, something that start_writer
-                                    // has to take into account
-                                    return Ok(Some(batch));
-                                }
-                                Err(RwLockError::Poisoned(e)) => {
-                                    panic!("rwlock on batch was poisoned {:?}", e);
-                                }
+                            } else {
+                                Ok(Some(batch))
                             }
                         } else {
                             Ok(Some(batch))
