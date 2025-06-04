@@ -787,6 +787,7 @@ impl Batch {
         mut batch: Batch,
         stopwatch: &StopwatchMetrics,
     ) -> Result<(), StoreError> {
+        let _section = stopwatch.start_section("transact_block:append_batch:append_inner");
         if batch.block_ptr.number <= self.block_ptr.number {
             return Err(internal_error!("Batches must go forward. Can't append a batch with block pointer {} to one with block pointer {}", batch.block_ptr, self.block_ptr));
         }
@@ -796,10 +797,12 @@ impl Batch {
             self.block_ptr = batch.block_ptr;
             self.block_times.append(&mut batch.block_times);
             self.firehose_cursor = batch.firehose_cursor;
+            _section.end();
         }
         {
             let _section = stopwatch.start_section("transact_block:append_batch:append_mods");
             self.mods.append(batch.mods)?;
+            _section.end();
         }
         {
             let _section = stopwatch.start_section("transact_block:append_batch:after_mods");
@@ -807,7 +810,9 @@ impl Batch {
             self.deterministic_errors
                 .append(&mut batch.deterministic_errors);
             self.offchain_to_remove.append(batch.offchain_to_remove);
+            _section.end();
         }
+        _section.end();
         Ok(())
     }
 
