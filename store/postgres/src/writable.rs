@@ -1053,9 +1053,11 @@ impl Queue {
                             match existing.try_write() {
                                 Ok(mut existing) => {
                                     if existing.weight() < ENV_VARS.store.write_batch_size {
-                                        let _section =
-                                            stopwatch.start_section("transact_block:append_batch");
-                                        let res = existing.append(batch, stopwatch).map(|()| None);
+                                        let res = {
+                                            let _section = stopwatch
+                                                .start_section("transact_block:append_batch");
+                                            existing.append(batch, stopwatch).map(|()| None)
+                                        };
                                         let _section =
                                             stopwatch.start_section("transact_block:notify_one");
                                         if existing.weight() >= ENV_VARS.store.write_batch_size {
