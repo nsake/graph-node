@@ -824,13 +824,19 @@ impl Batch {
     /// healthy by setting `self.error` to `Some(_)` and must not be written
     /// as it will be in an indeterminate state.
     pub fn append(&mut self, batch: Batch, stopwatch: &StopwatchMetrics) -> Result<(), StoreError> {
-        let res = self.append_inner(batch, stopwatch);
-        if let Err(e) = &res {
-            self.error = Some(e.clone());
-        }
+        let res = {
+            let _section = stopwatch.start_section("transact_block:append_batch:res_append");
+            let res = self.append_inner(batch, stopwatch);
+            if let Err(e) = &res {
+                self.error = Some(e.clone());
+            }
+            _section.end();
+            res
+        };
         {
-            stopwatch.start_section("transact_block:append_batch:weigh");
+            let _section = stopwatch.start_section("transact_block:append_batch:weigh");
             self.weigh();
+            _section.end();
         }
         res
     }
