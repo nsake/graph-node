@@ -265,7 +265,7 @@ impl TestContext {
         // Stolen from the IPFS provider, there's prolly a nicer way to re-use it
         let file_bytes = self
             .link_resolver
-            .cat(&logger, &deployment.hash.to_ipfs_link())
+            .cat(Default::default(), &deployment.hash.to_ipfs_link())
             .await
             .unwrap();
 
@@ -475,6 +475,7 @@ pub async fn setup<C: Blockchain>(
     let ipfs_client: Arc<dyn IpfsClient> = Arc::new(
         graph::ipfs::IpfsRpcClient::new_unchecked(
             graph::ipfs::ServerAddress::local_rpc_api(),
+            Default::default(),
             &logger,
         )
         .unwrap(),
