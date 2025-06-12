@@ -218,6 +218,10 @@ fn get_database_url(postgres_url: Option<&String>, database_dir: &Path) -> Resul
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
+
+    // Disable deployment hash validation in dev mode to allow using file paths and aliases as deployment hashes
+    std::env::set_var("GRAPH_NODE_DISABLE_DEPLOYMENT_HASH_VALIDATION", "true");
+
     let dev_opt = DevOpt::parse();
 
     let database_dir = Path::new(&dev_opt.database_dir);
