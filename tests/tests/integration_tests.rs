@@ -17,7 +17,6 @@ use anyhow::{anyhow, bail, Context, Result};
 use graph::futures03::StreamExt;
 use graph::prelude::alloy::primitives::U256;
 use graph::prelude::serde_json::{json, Value};
-use graph::prelude::web3;
 use graph_tests::contract::Contract;
 use graph_tests::helpers::{run_checked, TestFile};
 use graph_tests::subgraph::Subgraph;
@@ -25,6 +24,7 @@ use graph_tests::{error, status, CONFIG};
 use tokio::process::{Child, Command};
 use tokio::task::JoinError;
 use tokio::time::sleep;
+use web3;
 
 const SUBGRAPH_LAST_GRAFTING_BLOCK: i32 = 3;
 
