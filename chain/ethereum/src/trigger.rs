@@ -78,7 +78,7 @@ impl MappingTriggerTrait for MappingTrigger {
     }
 }
 
-// Logging the block is too verbose, so this strips the block from the trigger for Debug.
+// Logging the block is too verbose, so this strips the block and calls from the trigger for Debug.
 impl std::fmt::Debug for MappingTrigger {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         #[derive(Debug)]
@@ -87,6 +87,7 @@ impl std::fmt::Debug for MappingTrigger {
                 _transaction: Arc<Transaction>,
                 _log: Arc<Log>,
                 _params: Vec<LogParam>,
+                _receipt: Option<Arc<TransactionReceipt>>,
             },
             Call {
                 _transaction: Arc<Transaction>,
@@ -103,12 +104,13 @@ impl std::fmt::Debug for MappingTrigger {
                 transaction,
                 log,
                 params,
-                receipt: _,
+                receipt,
                 calls: _,
             } => MappingTriggerWithoutBlock::Log {
                 _transaction: transaction.cheap_clone(),
                 _log: log.cheap_clone(),
                 _params: params.clone(),
+                _receipt: receipt.clone(),
             },
             MappingTrigger::Call {
                 block: _,
