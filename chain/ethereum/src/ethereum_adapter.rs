@@ -2473,6 +2473,11 @@ fn resolve_transaction_receipt(
                 // receipt from this block.
                 Err(IngestorError::BlockUnavailable(block_hash))
             } else {
+                // Debug log the entire receipt
+                debug!(
+                    logger, "transaction receipt from RPC";
+                    "receipt" => ?receipt,
+                );
                 Ok(receipt)
             }
         }
