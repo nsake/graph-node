@@ -1416,12 +1416,19 @@ impl EthereumAdapterTrait for EthereumAdapter {
             )
             .await;
 
-        fetch_receipts_with_retry(web3, hashes, block_hash, logger, supports_block_receipts)
-            .await
-            .map(|transaction_receipts| EthereumBlock {
-                block: Arc::new(block),
-                transaction_receipts,
-            })
+        fetch_receipts_with_retry(
+            web3,
+            hashes,
+            block_hash,
+            logger,
+            supports_block_receipts,
+            &self.provider,
+        )
+        .await
+        .map(|transaction_receipts| EthereumBlock {
+            block: Arc::new(block),
+            transaction_receipts,
+        })
     }
 
     async fn block_hash_by_block_number(
@@ -2331,11 +2338,12 @@ async fn fetch_receipts_with_retry(
     block_hash: H256,
     logger: Logger,
     supports_block_receipts: bool,
+    provider: &str,
 ) -> Result<Vec<Arc<TransactionReceipt>>, IngestorError> {
     if supports_block_receipts {
         return fetch_block_receipts_with_retry(web3, hashes, block_hash, logger).await;
     }
-    fetch_individual_receipts_with_retry(web3, hashes, block_hash, logger).await
+    fetch_individual_receipts_with_retry(web3, hashes, block_hash, logger, provider).await
 }
 
 // Fetches receipts for each transaction in the block individually.
@@ -2344,6 +2352,7 @@ async fn fetch_individual_receipts_with_retry(
     hashes: Vec<H256>,
     block_hash: H256,
     logger: Logger,
+    provider: &str,
 ) -> Result<Vec<Arc<TransactionReceipt>>, IngestorError> {
     if ENV_VARS.fetch_receipts_in_batches {
         return fetch_transaction_receipts_in_batch_with_retry(web3, hashes, block_hash, logger)
@@ -2359,6 +2368,7 @@ async fn fetch_individual_receipts_with_retry(
                 tx_hash,
                 block_hash,
                 logger.cheap_clone(),
+                provider,
             )
         })
         .buffered(ENV_VARS.block_ingestor_max_concurrent_json_rpc_calls);
@@ -2419,11 +2429,12 @@ async fn fetch_transaction_receipt_with_retry(
     transaction_hash: H256,
     block_hash: H256,
     logger: Logger,
+    provider: &str,
 ) -> Result<Arc<TransactionReceipt>, IngestorError> {
     let logger = logger.cheap_clone();
     let retry_log_message = format!(
-        "eth_getTransactionReceipt RPC call for transaction {:?}",
-        transaction_hash
+        "eth_getTransactionReceipt RPC call for transaction {:?} from provider {}",
+        transaction_hash, provider
     );
     retry(retry_log_message, &logger)
         .redact_log_urls(true)
@@ -2602,6 +2613,7 @@ async fn get_transaction_receipts_for_transaction_hashes(
                 *transaction_hash,
                 *block_hash,
                 logger.cheap_clone(),
+                &adapter.provider,
             );
             receipt_futures.push(receipt_future)
         }
