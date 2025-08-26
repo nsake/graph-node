@@ -1226,6 +1226,7 @@ mod tests {
         Chain, Config, FirehoseProvider, Provider, ProviderDetails, Shard, Transport, Web3Provider,
     };
     use graph::blockchain::BlockchainKind;
+    use graph::endpoint::Compression;
     use graph::firehose::SubgraphLimit;
     use graph::http::{HeaderMap, HeaderValue};
     use graph::prelude::regex::Regex;
