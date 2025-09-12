@@ -1,7 +1,7 @@
-version: '3'
 services:
   graph-node:
     image: graphprotocol/graph-node
+    platform: linux/amd64
     ports:
       - '8000:8000'
       - '8001:8001'
@@ -19,18 +19,19 @@ services:
       postgres_pass: let-me-in
       postgres_db: graph-node
       ipfs: 'ipfs:5001'
-      ethereum: 'mainnet:http://host.docker.internal:8545'
+      ethereum: 'hyperevm:https://hyperliquid-node.invisium.com/evm'
       GRAPH_LOG: info
   ipfs:
-    image: ipfs/kubo:v0.17.0
+    image: ipfs/kubo:latest
+    platform: linux/amd64
     ports:
-      - '5001:5001'
+      - '5002:5001'
     volumes:
       - ./data/ipfs:/data/ipfs:Z
   postgres:
-    image: postgres
+    image: postgres:15
     ports:
-      - '5432:5432'
+      - '5435:5432'
     command:
       [
         "postgres",
