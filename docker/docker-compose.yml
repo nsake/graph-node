@@ -1,3 +1,4 @@
+name: ht.xyz.graph-node
 services:
   graph-node:
     image: graphprotocol/graph-node
